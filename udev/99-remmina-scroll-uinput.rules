@@ -1,0 +1,15 @@
+# remmina-scroll: let members of the "input" group use /dev/uinput.
+#
+# /dev/uinput is the kernel interface for creating virtual input devices, and
+# by default only root may open it. remmina-scroll runs as your user and needs
+# it to create its "scroll-multiplier" virtual mouse and keyboard.
+#
+#   KERNEL=="uinput"                match the /dev/uinput device node
+#   GROUP="input"                   hand it to the input group
+#   MODE="0660"                     root and the input group may read/write;
+#                                   everyone else gets no access
+#   OPTIONS+="static_node=uinput"   also apply this to the node that exists at
+#                                   boot before the uinput module is loaded
+#
+# Installed by install.sh as /etc/udev/rules.d/99-remmina-scroll-uinput.rules.
+KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"

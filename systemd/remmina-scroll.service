@@ -1,0 +1,12 @@
+[Unit]
+Description=Faster wheel scrolling and back/forward buttons in Remmina
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+# install.sh fills in the script path and the scroll factor.
+ExecStart=@BIN@ --factor @FACTOR@
+Restart=on-failure
+
+[Install]
+WantedBy=graphical-session.target
