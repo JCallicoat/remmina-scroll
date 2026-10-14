@@ -20,6 +20,7 @@ access to the mouse's /dev/input/event* node and write access to /dev/uinput.
 Optional: kdotool.
 """
 import argparse
+import queue
 import shutil
 import subprocess
 import sys
@@ -59,12 +60,29 @@ NAV_KEYS = {
 }
 
 
-def send_shortcut(kbd, key):
-    """Tap Super+key on the virtual keyboard."""
-    for code, value in ((NAV_MODIFIER, 1), (key, 1), (key, 0), (NAV_MODIFIER, 0)):
-        kbd.write(e.EV_KEY, code, value)
-        kbd.syn()
-        time.sleep(0.01)
+class ShortcutSender:
+    """Taps Super+key on the virtual keyboard from a worker thread.
+
+    Each tap has short pauses between key events so every application sees a
+    distinct press and release. Doing that on the mouse thread would stall
+    mouse movement for the length of the tap, so taps are queued here instead.
+    """
+
+    def __init__(self, kbd):
+        self.kbd = kbd
+        self.queue = queue.SimpleQueue()
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def send(self, key):
+        self.queue.put(key)
+
+    def _run(self):
+        while True:
+            key = self.queue.get()
+            for code, value in ((NAV_MODIFIER, 1), (key, 1), (key, 0), (NAV_MODIFIER, 0)):
+                self.kbd.write(e.EV_KEY, code, value)
+                self.kbd.syn()
+                time.sleep(0.01)
 
 
 def find_mouse():
@@ -172,6 +190,7 @@ def main():
     if not args.no_nav_buttons:
         kbd = evdev.UInput({e.EV_KEY: [NAV_MODIFIER] + list(set(NAV_KEYS.values()))},
                            name=KEYBOARD_NAME, phys=VIRTUAL_PHYS)
+        shortcuts_out = ShortcutSender(kbd)
     dev.grab()
 
     suppressed = set()  # nav buttons whose press was turned into a shortcut
@@ -207,7 +226,7 @@ def main():
                     ui.syn()
 
                 for key in shortcuts:
-                    send_shortcut(kbd, key)
+                    shortcuts_out.send(key)
 
                 wheel = [x for x in frame if x.type == e.EV_REL and x.code in WHEEL_CODES]
                 if wheel and active:
